@@ -1,0 +1,223 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scorpion Cursor</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    cursor: none;
+}
+
+body {
+    background: #030305;
+    overflow: hidden;
+}
+
+canvas {
+    display: block;
+}
+</style>
+</head>
+
+<body>
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+}
+resize();
+window.addEventListener("resize", resize);
+
+// Mouse position
+const mouse = {
+    x: innerWidth / 2,
+    y: innerHeight / 2
+};
+
+window.addEventListener("mousemove", e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+});
+
+window.addEventListener("touchmove", e => {
+    mouse.x = e.touches[0].clientX;
+    mouse.y = e.touches[0].clientY;
+}, { passive: true });
+
+// Scorpion body segments
+const count = 35;
+const nodes = [];
+
+for (let i = 0; i < count; i++) {
+    nodes.push({
+        x: mouse.x,
+        y: mouse.y,
+        angle: 0
+    });
+}
+
+// Draw a glowing line
+function line(x1, y1, x2, y2, width = 1) {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.lineWidth = width;
+    ctx.stroke();
+}
+
+// Draw a joint
+function joint(x, y, radius = 2) {
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+// Animation
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = "#777985";
+    ctx.fillStyle = "#d5d8e5";
+    ctx.shadowColor = "#bfc5ff";
+    ctx.shadowBlur = 5;
+    ctx.lineCap = "round";
+
+    // Head follows mouse
+    nodes[0].x += (mouse.x - nodes[0].x) * 0.22;
+    nodes[0].y += (mouse.y - nodes[0].y) * 0.22;
+
+    // Remaining segments follow each other
+    for (let i = 1; i < count; i++) {
+        const a = nodes[i - 1];
+        const b = nodes[i];
+
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        const angle = Math.atan2(dy, dx);
+
+        const spacing = i < 18 ? 9 : 8;
+
+        b.x = a.x - Math.cos(angle) * spacing;
+        b.y = a.y - Math.sin(angle) * spacing;
+        b.angle = angle;
+    }
+
+    // Body and tail
+    for (let i = 1; i < count; i++) {
+        const a = nodes[i - 1];
+        const b = nodes[i];
+
+        const angle = Math.atan2(a.y - b.y, a.x - b.x);
+        const size = i < 20 ? 5 : Math.max(1.5, 5 - (i - 20) * 0.35);
+
+        // Main segment
+        line(a.x, a.y, b.x, b.y, size);
+
+        // Small rib-like details on body
+        if (i < 22 && i % 2 === 0) {
+            const px = -Math.sin(angle);
+            const py = Math.cos(angle);
+            const rib = 8 - i * 0.12;
+
+            line(
+                b.x - px * rib, b.y - py * rib,
+                b.x + px * rib, b.y + py * rib,
+                1
+            );
+        }
+
+        joint(b.x, b.y, Math.max(1, size * 0.35));
+
+        // Six pairs of legs
+        if (i >= 7 && i <= 19 && i % 2 === 1) {
+            const side = i % 4 === 1 ? 1 : -1;
+            const px = -Math.sin(angle) * side;
+            const py = Math.cos(angle) * side;
+
+            const legLength = 16;
+            const kneeX = b.x + px * legLength
+                          + Math.cos(angle) * 7;
+            const kneeY = b.y + py * legLength
+                          + Math.sin(angle) * 7;
+
+            const footX = kneeX + px * 9
+                          - Math.cos(angle) * 10;
+            const footY = kneeY + py * 9
+                          - Math.sin(angle) * 10;
+
+            line(b.x, b.y, kneeX, kneeY, 1.5);
+            line(kneeX, kneeY, footX, footY, 1.5);
+
+            joint(footX, footY, 1.5);
+        }
+    }
+
+    // Head
+    const head = nodes[0];
+    const next = nodes[1];
+    const headAngle = Math.atan2(
+        head.y - next.y,
+        head.x - next.x
+    );
+
+    // Two pincers
+    for (const side of [-1, 1]) {
+        const px = -Math.sin(headAngle) * side;
+        const py = Math.cos(headAngle) * side;
+
+        const baseX = head.x + Math.cos(headAngle) * 8;
+        const baseY = head.y + Math.sin(headAngle) * 8;
+
+        const tipX = baseX + Math.cos(headAngle) * 13 + px * 10;
+        const tipY = baseY + Math.sin(headAngle) * 13 + py * 10;
+
+        line(baseX, baseY, tipX, tipY, 2);
+        line(tipX, tipY,
+             tipX + px * 5 - Math.cos(headAngle) * 5,
+             tipY + py * 5 - Math.sin(headAngle) * 5, 2);
+
+        joint(tipX, tipY, 2);
+    }
+
+    // Curved, raised tail and stinger
+    const tail = nodes[count - 1];
+    const previous = nodes[count - 2];
+
+    const tailAngle = Math.atan2(
+        tail.y - previous.y,
+        tail.x - previous.x
+    );
+
+    const stingerX = tail.x + Math.cos(tailAngle) * 14;
+    const stingerY = tail.y + Math.sin(tailAngle) * 14;
+
+    line(tail.x, tail.y, stingerX, stingerY, 2.5);
+
+    line(
+        stingerX, stingerY,
+        stingerX + Math.cos(tailAngle - 0.5) * 7,
+        stingerY + Math.sin(tailAngle - 0.5) * 7,
+        2
+    );
+
+    joint(stingerX, stingerY, 2.5);
+
+    ctx.shadowBlur = 0;
+    requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
